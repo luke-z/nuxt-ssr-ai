@@ -45,57 +45,64 @@ const generateComponent = async () => {
 
   error.value = "";
   isGenerating.value = true;
-  
+
   try {
-    const response = await useFetch("/api/ai", {
+    const { data } = await useFetch("/api/ai", {
       query: {
         prompt: prompt.value,
       },
     });
-    
+
     // Use defineAsyncComponent to handle errors more gracefully
     dynamicComponent.value = defineAsyncComponent({
-      loader: async () => {        
+      loader: async () => {
         // Create the component with proper error handling
         return defineComponent({
-          template: response.template || '<div>No template generated</div>',
+          template: data.value.template || "<div>No template generated</div>",
           setup() {
             try {
               // Use a safer approach with the Function constructor
               // The constructor is still needed for dynamic code execution
-              const setupFn = new Function('ref', 'computed', `
+              const setupFn = new Function(
+                "ref",
+                "computed",
+                `
                 try {
-                  ${response.script || ''}
+                  ${data.value.script || ""}
                   // If no return statement was added by the AI
                   return {}; 
                 } catch (err) {
                   console.error('Error in generated component setup:', err);
                   return {}; 
                 }
-              `);
-              
+              `
+              );
+
               return setupFn(ref, computed);
             } catch (setupError) {
-              console.error('Failed to create setup function:', setupError);
-              error.value = 'Component generation failed: ' + setupError.message;
+              console.error("Failed to create setup function:", setupError);
+              error.value =
+                "Component generation failed: " + setupError.message;
               return {};
             }
-          }
+          },
         });
       },
       // Add error handling for the async component
       errorComponent: {
-        template: '<div class="p-4 border border-red-500 rounded">Failed to load component</div>'
+        template:
+          '<div class="p-4 border border-red-500 rounded">Failed to load component</div>',
       },
       onError(error) {
-        console.error('Failed to load component:', error);
+        console.error("Failed to load component:", error);
       },
     });
   } catch (e) {
-    console.error('API request failed:', e);
-    error.value = 'Failed to generate component: ' + (e.message || 'Unknown error');
+    console.error("API request failed:", e);
+    error.value =
+      "Failed to generate component: " + (e.message || "Unknown error");
   } finally {
     isGenerating.value = false;
   }
-}
+};
 </script>
