@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+html[class='light'] {
+    color-scheme: light;
+    background: #ffffff;
+}
+
+html[class='dark'] {
+  color-scheme: dark;
+  background: #000000;
+}

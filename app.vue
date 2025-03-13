@@ -1,6 +1,7 @@
 <template>
   <div class="container mx-auto p-4">
     <h1 class="text-2xl font-bold mb-4">AI Generated Component</h1>
+    <DarkModeToggle />
 
     <div class="mb-4">
       <textarea
@@ -23,14 +24,13 @@
       {{ error }}
     </div>
 
-    <div v-if="dynamicComponent">
+    <div v-if="dynamicComponent" id="dynamic-component">
       <component :is="dynamicComponent" />
     </div>
   </div>
 </template>
-
 <script setup>
-import { ref, computed, defineAsyncComponent } from "vue";
+import { ref, computed, defineAsyncComponent, onUnmounted } from "vue";
 
 const prompt = ref("Generate a table");
 const error = ref("");
@@ -47,7 +47,7 @@ const generateComponent = async () => {
   isGenerating.value = true;
 
   try {
-    const { data } = await useFetch("/api/ai", {
+    const data = await $fetch("/api/ai", {
       query: {
         prompt: prompt.value,
       },
@@ -58,17 +58,38 @@ const generateComponent = async () => {
       loader: async () => {
         // Create the component with proper error handling
         return defineComponent({
-          template: data.value.template || "<div>No template generated</div>",
+          template: data.template || "<div>No template generated</div>",
+
           setup() {
             try {
               // Use a safer approach with the Function constructor
               // The constructor is still needed for dynamic code execution
+
+              const styleId = `ai-generated-style-${Date.now()}`;
+
               const setupFn = new Function(
                 "ref",
                 "computed",
+                "onUnmounted",
                 `
                 try {
-                  ${data.value.script || ""}
+                  const styleId = "${styleId}";
+
+                  const style = document.createElement('style');
+                  style.id = styleId;
+                  style.textContent = ${JSON.stringify(data.css)};             
+                  const dynamicComponentContainer = document.getElementById('dynamic-component');
+                  dynamicComponentContainer.appendChild(style);
+
+                  onUnmounted(() => {
+                    const style = document.getElementById(styleId);
+                    if (style) {
+                      style.remove();
+                    }
+                  });
+
+                  ${data.script || ""}
+
                   // If no return statement was added by the AI
                   return {}; 
                 } catch (err) {
@@ -78,7 +99,7 @@ const generateComponent = async () => {
               `
               );
 
-              return setupFn(ref, computed);
+              return setupFn(ref, computed, onUnmounted);
             } catch (setupError) {
               console.error("Failed to create setup function:", setupError);
               error.value =
