@@ -129,8 +129,15 @@ module.exports = {
     const templatePath = path.join(tmpDir, "template.html");
     fs.writeFileSync(templatePath, template);
 
+    const defaultCss = `
+    @layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@custom-variant dark (&:where(.dark, .dark *));
+    `;
+
     const inputPath = path.join(tmpDir, "input.css");
-    fs.writeFileSync(inputPath, '@import "tailwindcss"; @custom-variant dark (&:where(.dark, .dark *));');
+    fs.writeFileSync(inputPath, defaultCss);
 
     // Create output path for the command
     const outputPath = path.join(tmpDir, "output.css");
@@ -140,7 +147,7 @@ module.exports = {
       process.cwd(),
       "node_modules/.bin/tailwindcss"
     );
-    const tailwindCommand = `${tailwindBin} -i ${inputPath} -o ${outputPath} --config ${configPath}`;
+    const tailwindCommand = `${tailwindBin} -i ${inputPath} -o ${outputPath} --config ${configPath} --minify`;
 
     // Execute the command
     execSync(tailwindCommand, { stdio: "pipe", cwd: tmpDir });
