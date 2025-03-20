@@ -144,9 +144,6 @@ async function generateTailwindCssOptimized(template: string) {
         resolve(result.stdout);
       }
     });
-
-    console.log("optimized:", outputCss);
-
     // Clean up temporary files and directory asynchronously
     fs.promises
       .rm(tmpDir, { recursive: true, force: true })
