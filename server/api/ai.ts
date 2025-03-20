@@ -4,7 +4,7 @@ import { z } from "zod";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 
 // Define the schema for the AI response
 const AIResponseSchema = z.object({
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
         {
           role: "system",
           content:
-            "You are a helpful assistant that generates beautiful, modern Vue 3 components with light and dark mode support. Return your response in a structured JSON format with 'template' and 'script' fields, do not include the <template> and <script> tags. The template should contain the Vue template section, and the script should contain the script setup section. Use tailwind css for styling. For scripting, use the script setup syntax. IMPORTANT: Make sure the script ends with a return statement that returns all variables and functions used in the template. Example: 'return { count, increment, items, ...etc }'. You are allowed to use ref and computed as they are auto imported, apart from that, do not use any other imports.",
+            "You are a helpful assistant that generates beautiful, modern Vue 3 components with light and dark mode support. Return your response in a structured JSON format with 'template' and 'script' fields, do not include the <template> and <script> tags. The template should contain the Vue template section, and the script should contain the script setup section. Use tailwind css for styling. Prefix all tailwind classes with 'ai:'. For scripting, use the script setup syntax. IMPORTANT: Make sure the script ends with a return statement that returns all variables and functions used in the template. Example: 'return { count, increment, items, ...etc }'. You are allowed to use ref and computed as they are auto imported, apart from that, do not use any other imports.",
         },
         { role: "user", content: prompt as string },
       ],
@@ -64,9 +64,9 @@ export default defineEventHandler(async (event) => {
       const validatedContent = AIResponseSchema.parse(contentJson);
 
       // Extract Tailwind classes from the template
-
-      const generatedCss = await generateTailwindCss(validatedContent.template);
-      console.log(generatedCss);
+      const generatedCss = await generateTailwindCssOptimized(
+        validatedContent.template
+      );
       validatedContent.css = generatedCss;
 
       // Basic safety checks on the received content
@@ -103,66 +103,56 @@ export default defineEventHandler(async (event) => {
   }
 });
 
-// Function to generate CSS using Tailwind CLI
-async function generateTailwindCss(template: string) {
+async function generateTailwindCssOptimized(template: string) {
   try {
-    // Create a temporary directory
-    const tmpDir = fs.mkdtempSync(
-      path.join(process.cwd(), ".tmp", "tailwind-")
-    );
+    // Create a temporary directory in the OS temp directory rather than project directory
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailwind-"));
 
-    // Create an inline tailwind config
-    const tailwindConfig = `
-module.exports = {
-  content: ['template.html'],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}`;
-
-    // Write the inline config to a temporary file
-    const configPath = path.join(tmpDir, "tailwind.config.js");
-    fs.writeFileSync(configPath, tailwindConfig);
-
-    // Write the input CSS to a file
+    // Create necessary files all at once
     const templatePath = path.join(tmpDir, "template.html");
-    fs.writeFileSync(templatePath, template);
 
     const defaultCss = `
     @layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
+@import "tailwindcss/theme" layer(theme) prefix(ai);
+@import "tailwindcss/utilities" layer(utilities);
 @custom-variant dark (&:where(.dark, .dark *));
     `;
 
-    const inputPath = path.join(tmpDir, "input.css");
-    fs.writeFileSync(inputPath, defaultCss);
-
-    // Create output path for the command
-    const outputPath = path.join(tmpDir, "output.css");
+    // Write all files in parallel
+    await fs.promises.writeFile(templatePath, template);
 
     // Use the full path to the tailwindcss binary in node_modules
     const tailwindBin = path.resolve(
       process.cwd(),
       "node_modules/.bin/tailwindcss"
     );
-    const tailwindCommand = `${tailwindBin} -i ${inputPath} -o ${outputPath} --config ${configPath} --minify`;
 
-    // Execute the command
-    execSync(tailwindCommand, { stdio: "pipe", cwd: tmpDir });
+    // Use spawn instead of execSync for better performance
+    const outputCss = await new Promise<string>((resolve, reject) => {
+      const result = spawnSync(
+        tailwindBin,
+        ["--input", "-", "--output", "-", "--cwd", tmpDir],
+        {
+          input: defaultCss,
+          encoding: "utf8",
+        }
+      );
 
-    // Read the output file
-    const result = fs.readFileSync(outputPath, "utf8");
+      if (result.error) {
+        reject(result.error);
+      } else {
+        resolve(result.stdout);
+      }
+    });
 
-    // Clean up temporary files and directory
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch (cleanupError) {
-      console.warn("Error during cleanup:", cleanupError);
-    }
+    console.log("optimized:", outputCss);
 
-    return result;
+    // Clean up temporary files and directory asynchronously
+    fs.promises
+      .rm(tmpDir, { recursive: true, force: true })
+      .catch((err) => console.warn("Error during cleanup:", err));
+
+    return outputCss;
   } catch (error) {
     console.error("Error generating Tailwind CSS:", error);
     return "";
