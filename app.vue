@@ -24,18 +24,80 @@
       {{ error }}
     </div>
 
-    <div v-if="dynamicComponent" id="dynamic-component">
-      <component :is="dynamicComponent" />
-    </div>
+    <ClientOnly>
+      <!-- <component :is="dynamicComponent" /> -->
+      <!-- <component :is="dynamicComponent2" /> -->
+      <component :is="dynamicComponent3" />
+      <!-- <component :is="dynamicComponent4" /> -->
+    </ClientOnly>
   </div>
 </template>
 <script setup>
-import { ref, computed, defineAsyncComponent, onUnmounted } from "vue";
-
 const prompt = ref("Generate a table");
 const error = ref("");
 const isGenerating = ref(false);
-const dynamicComponent = shallowRef();
+const componentData = ref(null);
+
+// const dynamicComponent = defineAsyncComponent(async () => {
+//   // Fetch the precompiled module text from your backend.
+//   const moduleText = await $fetch("/api/test");
+
+//   const blob = new Blob([moduleText], { type: "application/javascript" });
+//   const blobUrl = URL.createObjectURL(blob);
+
+//   // Dynamically import the module from the blob URL.
+//   const module = await import(/* @vite-ignore */ blobUrl);
+
+//   console.log(module);
+
+//   // Return the component to be used by defineAsyncComponent.
+//   return module;
+// });
+const dynamicComponent2 = defineAsyncComponent(async () => {
+  // Fetch the precompiled module text from your backend.
+  const moduleText = await $fetch("/api/test2");
+
+  const blob = new Blob([moduleText], { type: "application/javascript" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  // Dynamically import the module from the blob URL.
+  const module = await import(/* @vite-ignore */ blobUrl);
+
+  console.log(module);
+
+  // Return the component to be used by defineAsyncComponent.
+  return module;
+});
+const dynamicComponent3 = defineAsyncComponent(async () => {
+  // Fetch the precompiled module text from your backend.
+  const moduleText = await $fetch("/api/test3");
+
+  const blob = new Blob([moduleText], { type: "application/javascript" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  // Dynamically import the module from the blob URL.
+  const module = await import(/* @vite-ignore */ blobUrl);
+
+  console.log(module);
+
+  // Return the component to be used by defineAsyncComponent.
+  return module;
+});
+// const dynamicComponent4 = defineAsyncComponent(async () => {
+//   // Fetch the precompiled module text from your backend.
+//   const moduleText = await $fetch("/api/test4");
+
+//   const blob = new Blob([moduleText], { type: "application/javascript" });
+//   const blobUrl = URL.createObjectURL(blob);
+
+//   // Dynamically import the module from the blob URL.
+//   const module = await import(/* @vite-ignore */ blobUrl);
+
+//   console.log(module);
+
+//   // Return the component to be used by defineAsyncComponent.
+//   return module;
+// });
 
 const generateComponent = async () => {
   if (!prompt.value.trim()) {
@@ -53,70 +115,17 @@ const generateComponent = async () => {
       },
     });
 
-    // Use defineAsyncComponent to handle errors more gracefully
-    dynamicComponent.value = defineAsyncComponent({
-      loader: async () => {
-        // Create the component with proper error handling
-        return defineComponent({
-          template: data.template || "<div>No template generated</div>",
+    // Store the component data to pass to the server component
+    componentData.value = data;
 
-          setup() {
-            try {
-              // Use a safer approach with the Function constructor
-              // The constructor is still needed for dynamic code execution
-
-              const styleId = `ai-generated-style-${Date.now()}`;
-
-              const setupFn = new Function(
-                "ref",
-                "computed",
-                "onUnmounted",
-                `
-                try {
-                  const styleId = "${styleId}";
-
-                  const style = document.createElement('style');
-                  style.id = styleId;
-                  style.textContent = ${JSON.stringify(data.css)};             
-                  const dynamicComponentContainer = document.getElementById('dynamic-component');
-                  dynamicComponentContainer.appendChild(style);
-
-                  onUnmounted(() => {
-                    const style = document.getElementById(styleId);
-                    if (style) {
-                      style.remove();
-                    }
-                  });
-
-                  ${data.script || ""}
-
-                  // If no return statement was added by the AI
-                  return {}; 
-                } catch (err) {
-                  console.error('Error in generated component setup:', err);
-                  return {}; 
-                }
-              `
-              );
-
-              return setupFn(ref, computed, onUnmounted);
-            } catch (setupError) {
-              console.error("Failed to create setup function:", setupError);
-              error.value =
-                "Component generation failed: " + setupError.message;
-              return {};
-            }
-          },
-        });
-      },
-      // Add error handling for the async component
-      errorComponent: {
-        template:
-          '<div class="p-4 border border-red-500 rounded">Failed to load component</div>',
-      },
-      onError(error) {
-        console.error("Failed to load component:", error);
-      },
+    // Add any global styles
+    useHead({
+      style: [
+        {
+          id: "ai-generated-style",
+          children: data.css,
+        },
+      ],
     });
   } catch (e) {
     console.error("API request failed:", e);
