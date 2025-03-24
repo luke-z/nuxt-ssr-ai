@@ -1,10 +1,9 @@
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import { z } from "zod";
-import fs from "fs";
 import path from "path";
-import os from "os";
 import { spawnSync } from "child_process";
+import { createFsFromVolume, Volume } from "memfs";
 
 // Define the schema for the AI response
 const AIResponseSchema = z.object({
@@ -103,23 +102,27 @@ export default defineEventHandler(async (event) => {
   }
 });
 
+const vol = new Volume();
+const memfs = createFsFromVolume(vol);
+
 async function generateTailwindCssOptimized(template: string) {
   try {
     // Create a temporary directory in the OS temp directory rather than project directory
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailwind-"));
+    const tmpDir = `/tailwind-${Date.now()}`;
+    memfs.mkdirSync(tmpDir, { recursive: true });
 
     // Create necessary files all at once
     const templatePath = path.join(tmpDir, "template.html");
 
     const defaultCss = `
     @layer theme, base, components, utilities;
-@import "tailwindcss/theme" layer(theme) prefix(ai);
+@import "tailwindcss/theme" layer(theme);
 @import "tailwindcss/utilities" layer(utilities);
 @custom-variant dark (&:where(.dark, .dark *));
     `;
 
     // Write all files in parallel
-    await fs.promises.writeFile(templatePath, template);
+    memfs.writeFileSync(templatePath, template);
 
     // Use the full path to the tailwindcss binary in node_modules
     const tailwindBin = path.resolve(
@@ -145,7 +148,7 @@ async function generateTailwindCssOptimized(template: string) {
       }
     });
     // Clean up temporary files and directory asynchronously
-    fs.promises
+    await memfs.promises
       .rm(tmpDir, { recursive: true, force: true })
       .catch((err) => console.warn("Error during cleanup:", err));
 
@@ -155,3 +158,5 @@ async function generateTailwindCssOptimized(template: string) {
     return "";
   }
 }
+
+export { generateTailwindCssOptimized };

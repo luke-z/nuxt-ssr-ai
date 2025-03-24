@@ -2,21 +2,22 @@ import { build } from "vite";
 import { RollupOutput, OutputChunk, OutputBundle, OutputOptions } from "rollup";
 import vue from "@vitejs/plugin-vue";
 import { Volume, createFsFromVolume } from "memfs";
+import { generateTailwindCssOptimized } from "./ai";
 
 const completeTemplate = `
 <template>
   <div class="container mx-auto p-6 max-w-lg bg-white rounded-lg shadow-md">
     <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">{{ title }}</h1>
     <div class="flex mb-4">
-      <input
-        v-model="newItem"
-        placeholder="Enter new item"
-        @keyup.enter="addItem"
-        class="flex-grow px-4 py-2 border rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-      <p>{{ count }}</p>
-      <button @click="addItem" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r transition-colors">Add Item</button>
-      <button @click="increment" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r transition-colors">Increment</button>
+    <input
+    v-model="newItem"
+    placeholder="Enter new item"
+    @keyup.enter="addItem"
+    class="flex-grow px-4 py-2 border rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+    <p>{{ count }}</p>
+    <button @click="addItem" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r transition-colors">Add Item</button>
+    <button @click="increment" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-r transition-colors">Increment</button>
     </div>
 
     <transition-group name="list" tag="ul" class="space-y-2">
@@ -37,6 +38,7 @@ const completeTemplate = `
       <p>Total Items: <span class="font-semibold">{{ items.length }}</span></p>
       <p>Completed Items: <span class="font-semibold">{{ completedCount }}</span></p>
     </div>
+
   </div>
 </template>
 
@@ -146,6 +148,41 @@ const memfsPlugin = () => {
   };
 };
 
+const processVueImports = (chunk: OutputChunk) => {
+  const vueImports = chunk.code.match(
+    /import\s*{([^}]*)}\s*from\s*["']vue["']\s*;?/g
+  );
+  if (!vueImports?.length) return;
+
+  // Extract the content between the curly braces
+  const importMatches = vueImports[0].match(/import\s*{([^}]*)}\s*from/);
+  if (!importMatches?.length || !importMatches[1]) return;
+
+  const importedItems = importMatches[1].split(",").map((item) => item.trim());
+
+  // Find items with "as" and create replacement statements
+  for (const item of importedItems) {
+    if (!item.includes(" as ")) continue;
+
+    const [original, alias] = item.split(" as ").map((part) => part.trim());
+    chunk.code += `\nconst ${alias} = ${original};`;
+  }
+};
+
+const removeVueImportStatements = (chunk: OutputChunk) => {
+  chunk.code = chunk.code.replace(
+    /import\s*{[^}]*}\s*from\s*["']vue["']\s*;?/g,
+    ""
+  );
+};
+
+const transformDefaultExports = (chunk: OutputChunk) => {
+  chunk.code = chunk.code.replace(
+    /export\s*{\s*([A-Za-z0-9_$]+)\s+as\s+default\s*};?/g,
+    "const _componentExport = $1;"
+  );
+};
+
 // Custom plugin to transform exports
 const transformExportsPlugin = () => {
   return {
@@ -154,18 +191,9 @@ const transformExportsPlugin = () => {
       for (const fileName in bundle) {
         const chunk = bundle[fileName];
         if (chunk.type === "chunk") {
-          // Remove Vue import statements
-          chunk.code = chunk.code.replace(
-            /import\s*{[^}]*}\s*from\s*["']vue["']\s*;?/g,
-            ""
-          );
-
-          // Replace default exports with named exports
-          // This transforms "export { component as default }" to "const component"
-          chunk.code = chunk.code.replace(
-            /export\s*{\s*([A-Za-z0-9_$]+)\s+as\s+default\s*};?/g,
-            "const _componentExport = $1;"
-          );
+          processVueImports(chunk);
+          removeVueImportStatements(chunk);
+          transformDefaultExports(chunk);
         }
       }
     },
@@ -178,13 +206,18 @@ export default defineEventHandler(async (event) => {
   const tempFile = `/${componentName}.vue`;
   memfs.writeFileSync(tempFile, completeTemplate);
 
+  const optimizedTemplate = await generateTailwindCssOptimized(
+    completeTemplate
+  );
+  console.log(optimizedTemplate);
+
   try {
     // Build with Vite
     const buildResult = await build({
       plugins: [vue(), memfsPlugin(), transformExportsPlugin()],
       build: {
         write: false,
-        minify: false,
+        minify: true,
         lib: {
           entry: tempFile,
           formats: ["es"],
@@ -209,26 +242,44 @@ export default defineEventHandler(async (event) => {
     ) as OutputChunk;
     const bundledCode = jsFile.code;
 
+    const vueShake = [
+      "ref",
+      "isRef",
+      "reactive",
+      "computed",
+      "watch",
+      "onMounted",
+      "onUnmounted",
+      "nextTick",
+      "unref",
+    ];
+
     // Get the Vue imports used in the component render function
     const vueBindings = jsFile.importedBindings?.vue;
+    if (vueBindings) {
+      vueShake.push(...vueBindings);
+    }
+
+    console.log(jsFile);
+    const primevueBindings = jsFile.importedBindings?.primevue;
+    if (primevueBindings) {
+      primevueBindings.push(...primevueBindings);
+    }
+
+    const uniqueVueShake = [...new Set(vueShake)].join(", ");
 
     // Wrap the code in an initialize function that returns the component to inject Vue, composables and other dependencies
     const wrappedCode = `    
-      function initialize(Vue, composables) {
+      function initialize(Vue, composables, components) {
         const {
-          ref,
-          isRef,
-          reactive,
-          computed,
-          watch,
-          onMounted,
-          onUnmounted,
-          nextTick,
-          unref,
-          ${vueBindings.join(", ")}
+          ${uniqueVueShake}
         } = Vue;
         const { useCounter } = composables;
+        
         ${bundledCode}
+
+        _componentExport.components = components;       
+    
         return _componentExport;    
       }    
       export default initialize;

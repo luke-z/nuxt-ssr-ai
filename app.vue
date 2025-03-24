@@ -2,6 +2,7 @@
   <div class="container mx-auto p-4">
     <h1 class="text-2xl font-bold mb-4">AI Generated Component</h1>
     <DarkModeToggle />
+    <Button label="Click" />
 
     <div class="mb-4">
       <textarea
@@ -35,6 +36,7 @@
 </template>
 <script setup>
 import { onRenderTracked, onRenderTriggered } from "vue";
+import Button from "primevue/button";
 const prompt = ref("Generate a table");
 const error = ref("");
 const isGenerating = ref(false);
@@ -103,13 +105,27 @@ const dynamicComponent4 = defineAsyncComponent(async () => {
 
   // return module
 
+  // Check if the module text contains Button component
+  const hasButtonComponent = moduleText.includes('Button');
+  
+  // Import Button component if needed
+  const Button = hasButtonComponent ? (await import('primevue/button')).default : null;
+  
+  // Prepare components array for initialization
+  const components = {};
+  if (hasButtonComponent) {
+    components.Button = Button;
+  }
+
   const initialize = module.default;
 
   const composables = {
     useCounter,
   }
 
-  const component = initialize(vueInstance, composables);
+  console.log('components', components)
+
+  const component = initialize(vueInstance, composables, components);
   // const component = initialize(
   //   ref,
   //   reactive,
