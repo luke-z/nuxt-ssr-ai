@@ -27,12 +27,14 @@
     <ClientOnly>
       <!-- <component :is="dynamicComponent" /> -->
       <!-- <component :is="dynamicComponent2" /> -->
-      <component :is="dynamicComponent3" />
-      <!-- <component :is="dynamicComponent4" /> -->
+      <!-- <component :is="dynamicComponent3" /> -->
+      <component :is="dynamicComponent4" />
+        <!-- <dynamic-component-4 /> -->
     </ClientOnly>
   </div>
 </template>
 <script setup>
+import { onRenderTracked, onRenderTriggered } from "vue";
 const prompt = ref("Generate a table");
 const error = ref("");
 const isGenerating = ref(false);
@@ -53,39 +55,9 @@ const componentData = ref(null);
 //   // Return the component to be used by defineAsyncComponent.
 //   return module;
 // });
-const dynamicComponent2 = defineAsyncComponent(async () => {
-  // Fetch the precompiled module text from your backend.
-  const moduleText = await $fetch("/api/test2");
-
-  const blob = new Blob([moduleText], { type: "application/javascript" });
-  const blobUrl = URL.createObjectURL(blob);
-
-  // Dynamically import the module from the blob URL.
-  const module = await import(/* @vite-ignore */ blobUrl);
-
-  console.log(module);
-
-  // Return the component to be used by defineAsyncComponent.
-  return module;
-});
-const dynamicComponent3 = defineAsyncComponent(async () => {
-  // Fetch the precompiled module text from your backend.
-  const moduleText = await $fetch("/api/test3");
-
-  const blob = new Blob([moduleText], { type: "application/javascript" });
-  const blobUrl = URL.createObjectURL(blob);
-
-  // Dynamically import the module from the blob URL.
-  const module = await import(/* @vite-ignore */ blobUrl);
-
-  console.log(module);
-
-  // Return the component to be used by defineAsyncComponent.
-  return module;
-});
-// const dynamicComponent4 = defineAsyncComponent(async () => {
+// const dynamicComponent2 = defineAsyncComponent(async () => {
 //   // Fetch the precompiled module text from your backend.
-//   const moduleText = await $fetch("/api/test4");
+//   const moduleText = await $fetch("/api/test2");
 
 //   const blob = new Blob([moduleText], { type: "application/javascript" });
 //   const blobUrl = URL.createObjectURL(blob);
@@ -98,6 +70,61 @@ const dynamicComponent3 = defineAsyncComponent(async () => {
 //   // Return the component to be used by defineAsyncComponent.
 //   return module;
 // });
+// const dynamicComponent3 = defineAsyncComponent(async () => {
+//   // Fetch the precompiled module text from your backend.
+//   const moduleText = await $fetch("/api/test3");
+
+//   const blob = new Blob([moduleText], { type: "application/javascript" });
+//   const blobUrl = URL.createObjectURL(blob);
+
+//   // Dynamically import the module from the blob URL.
+//   const vueInstance = await import("vue");
+//   const module = await import(/* @vite-ignore */ blobUrl);
+
+//   const initialize = module.default;
+
+//   const component = initialize(vueInstance);
+
+//   // Return the component to be used by defineAsyncComponent.
+//   return component;
+// });
+const dynamicComponent4 = defineAsyncComponent(async () => {
+  // Fetch the precompiled module text from your backend.
+  const moduleText = await $fetch("/api/test4");
+
+  const blob = new Blob([moduleText], { type: "application/javascript" });
+  const blobUrl = URL.createObjectURL(blob);
+
+  console.log(useNuxtApp());
+
+  // Dynamically import the module from the blob URL.
+  const vueInstance = await import("vue");
+  const module = await import(/* @vite-ignore */ blobUrl);
+
+  // return module
+
+  const initialize = module.default;
+
+  const composables = {
+    useCounter,
+  }
+
+  const component = initialize(vueInstance, composables);
+  // const component = initialize(
+  //   ref,
+  //   reactive,
+  //   computed,
+  //   watch,
+  //   onMounted,
+  //   onUnmounted,
+  //   useNuxtApp,
+  //   onRenderTracked,
+  //   onRenderTriggered
+  // );
+
+  // Return the component to be used by defineAsyncComponent.
+  return component;
+});
 
 const generateComponent = async () => {
   if (!prompt.value.trim()) {

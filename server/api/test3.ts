@@ -39,7 +39,7 @@ const completeTemplate = `
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from '#imports';
+// import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 
 // Basic reactive state
 const title = ref("Vue SFC Demonstration");
@@ -95,6 +95,10 @@ watch(
 // Lifecycle hooks
 onMounted(() => {
   console.log("Component mounted");
+  setTimeout(() => {
+    newItem.value = "hello";
+    addItem();
+  }, 1000);
 });
 
 onUnmounted(() => {
@@ -152,12 +156,30 @@ export default defineEventHandler(async (event) => {
       write: false,
       format: "esm",
       platform: "browser",
-      external: ['#imports'], // Keep Vue as external dependency
+      // external: ['vue'], // Keep Vue as external dependency
       metafile: true,
     });
 
     // Get the bundled code
     const bundledCode = result.outputFiles[0].text;
+
+    const exportRegex = /export\s*{\s*([A-Za-z0-9_$]+)\s+as\s+default\s*}/;
+    const exportMatch = bundledCode.match(exportRegex);
+
+    const modifiedCode = bundledCode.replace(
+      exportRegex,
+      'const componentToReturn = ' + exportMatch[1]
+    );
+
+    const wrappedCode = `    
+    function initialize(vueInstance) {
+      const { ref, reactive, computed, watch, onMounted, onUnmounted, useNuxtApp } = vueInstance;
+      ${modifiedCode}
+      return componentToReturn;
+    }
+    
+    export default initialize;
+    `;
 
     // Optional: Log the dependency graph
     if (result.metafile) {
@@ -168,7 +190,7 @@ export default defineEventHandler(async (event) => {
     // Clean up the temporary file
     fs.unlinkSync(tempFile);
 
-    return bundledCode;
+    return wrappedCode;
   } catch (error) {
     console.error("Bundle error:", error);
     // Clean up on error
