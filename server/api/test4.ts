@@ -39,6 +39,7 @@ const completeTemplate = `
       <p>Completed Items: <span class="font-semibold">{{ completedCount }}</span></p>
     </div>
 
+    <Button label="Click" />
   </div>
 </template>
 
