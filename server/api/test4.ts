@@ -209,8 +209,6 @@ export default defineEventHandler(async (event) => {
     ) as OutputChunk;
     const bundledCode = jsFile.code;
 
-    console.log(jsFile);
-
     // Get the Vue imports used in the component render function
     const vueBindings = jsFile.importedBindings?.vue;
 
